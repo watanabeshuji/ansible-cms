@@ -36,3 +36,12 @@
     - { regexp: "^define\\('DB_PASSWORD'.+$", replace: "define('DB_PASSWORD', '{{ db_password }}');"}
     - { regexp: "^define\\('DB_HOST'.+$",     replace: "define('DB_HOST', '{{ db_endpoint }}');"}
 
+- name: "/etc/httpd/conf.d/wordpress.conf"
+  template:
+    src: wordpress.conf
+    dest: /etc/httpd/conf.d/wordpress.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - restart apache24 service
