@@ -1,0 +1,9 @@
+---
+- name: apache24 installed
+  yum:
+    name: httpd24
+- name: httpd service started
+  service:
+    name: httpd
+    state: started
+    enabled: yes

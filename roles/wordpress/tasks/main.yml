@@ -1,0 +1,38 @@
+---
+- name: php70 installed
+  yum:
+    name: php70,php70-mysqlnd
+
+- name: "check /opt/wordpress' if exist"
+  stat:
+    path: "/opt/wordpress"
+  register: stat_wp_home
+- name: download wordpress
+  unarchive:
+    src: "{{ wp_download_url }}"
+    dest: /opt
+    remote_src: True
+    owner: apache
+    group: apache
+  when: stat_wp_home.stat.exists == false
+
+- name: "check /opt/wordpress/wp-config.php' if exist"
+  stat:
+    path: "/opt/wordpress/wp-config.php"
+  register: stat_wp_config
+- name: "rename /opt/wordpress/wp-config-sample.php to /opt/wordpress/wp-config.php"
+  shell: mv /opt/wordpress/wp-config-sample.php /opt/wordpress/wp-config.php
+  when: stat_wp_config.stat.exists == false
+
+- name: "DB_NAME: /opt/wordpress/wp-config.php"
+  replace:
+    path: /opt/wordpress/wp-config.php
+    regexp: "{{ item.regexp }}"
+    replace: "{{ item.replace }}"
+    backup: yes
+  with_items:
+    - { regexp: "^define\\('DB_NAME'.+$",     replace: "define('DB_NAME', '{{ db_name }}');"}
+    - { regexp: "^define\\('DB_USER'.+$",     replace: "define('DB_USER', '{{ db_user }}');"}
+    - { regexp: "^define\\('DB_PASSWORD'.+$", replace: "define('DB_PASSWORD', '{{ db_password }}');"}
+    - { regexp: "^define\\('DB_HOST'.+$",     replace: "define('DB_HOST', '{{ db_endpoint }}');"}
+

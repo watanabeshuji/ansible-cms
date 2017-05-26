@@ -1,0 +1,6 @@
+#
+- group_by:
+    key: "{{ cms_type }}"
+- name: set timezone to Asia/Tokyo
+  timezone:
+    name: Asia/Tokyo
