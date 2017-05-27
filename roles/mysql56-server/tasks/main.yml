@@ -2,4 +2,9 @@
 - name: mysql56-server installed
   yum:
     name: mysql56-server
+- name: mysqld service started
+  service:
+    name: mysqld
+    state: started
+    enabled: yes
 
