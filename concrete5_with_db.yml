@@ -3,7 +3,8 @@
 #
 # ansible-playbook --extra-vars "db_user=master db_password=ChangeIt db_name=concrete5" concrete5_with_db.yml
 #
-- hosts: test
+- hosts: localhost
+  connection: local
   vars:
     cms_type: concrete5
   roles:
