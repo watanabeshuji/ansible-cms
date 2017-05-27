@@ -4,3 +4,5 @@
 - name: set timezone to Asia/Tokyo
   timezone:
     name: Asia/Tokyo
+- locale_gen:
+    name: ja_JP.UTF-8
