@@ -1,0 +1,14 @@
+#
+# ablogcms_with_db.yml
+#
+# ansible-playbook --extra-vars "db_user=master db_password=ChangeIt db_name=ablogcms" ablogcms_with_db.yml
+#
+- hosts: localhost
+  connection: local
+  vars:
+    cms_type: ablogcms
+  roles:
+   - common
+   - mysql56-server
+   - apache24
+   - ablogcms

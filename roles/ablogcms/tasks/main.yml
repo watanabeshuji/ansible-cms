@@ -1,0 +1,21 @@
+---
+- name: php70 installed
+  yum:
+    name: "php70,php70-mysqlnd,php70-gd,php70-mbstring,php70-pdo"
+
+- name: "check {{ ablog_path }}' if exist"
+  stat:
+    path: "{{ ablog_path }}"
+  register: stat_ablog_home
+- include: setup.yml
+  when: stat_ablog_home.stat.exists == false
+
+- name: "/etc/httpd/conf.d/ablogcms.conf"
+  template:
+    src: ablogcms.conf
+    dest: /etc/httpd/conf.d/ablogcms.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - restart apache24 service

@@ -1,0 +1,32 @@
+---
+- name: download a blog cms
+  unarchive:
+    src: "{{ ablog_download_url }}"
+    dest: /tmp
+    remote_src: yes
+    owner: apache
+    group: apache
+- name: move direcory
+  shell: mv /tmp/acms*/ablogcms /opt/
+- name: rename htaccess.txt
+  shell: "rename htaccess.txt .htaccess {{ ablog_path }}/htaccess.txt {{ ablog_path }}/*/htaccess.txt"
+
+- name: download ioncube loader
+  unarchive:
+    src: "https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.zip"
+    dest: /tmp
+    remote_src: yes
+- name: install ioncube/ioncube_loader_lin_7.0.so
+  shell: mv /tmp/ioncube/ioncube_loader_lin_7.0.so /usr/lib64/php/7.0/modules/
+- name: "/etc/php-7.0.d/ioncube_loader.ini"
+  template:
+    src: ioncube_loader.ini
+    dest: /etc/php-7.0.d/ioncube_loader.ini
+    mode: "0644"
+  notify:
+    - restart apache24 service
+
+- name: delete tmp/acm
+  shell: rm -rf /tmp/acms*
+- name: delete tmp/ioncube
+  shell: rm -rf /tmp/ioncube
