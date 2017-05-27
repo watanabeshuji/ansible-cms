@@ -10,7 +10,7 @@
   lineinfile:
     dest: /etc/sysconfig/i18n
     regexp: '^LANG='
-    line: 'LANG={{ system_lang }}'
+    line: 'LANG=ja_JP.UTF-8'
 - name: set locale in /etc/cloud/cloud.cfg
   lineinfile:
     dest: /etc/cloud/cloud.cfg
