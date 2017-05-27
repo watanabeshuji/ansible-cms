@@ -155,7 +155,7 @@ Resources:
     Type: "AWS::EC2::Instance"
     CreationPolicy:
       ResourceSignal:
-        Timeout: PT15M
+        Timeout: PT5M
     Properties:
       InstanceType: "t2.small"
       ImageId: "ami-923d12f5"
