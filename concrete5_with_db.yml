@@ -1,0 +1,13 @@
+#
+# concrete5_with_db.yml
+#
+# ansible-playbook --extra-vars "db_user=master db_password=ChangeIt db_name=concrete5" concrete5_with_db.yml
+#
+- hosts: test
+  vars:
+    cms_type: concrete5
+  roles:
+   - common
+   - mysql56-server
+   - apache24
+   - concrete5
