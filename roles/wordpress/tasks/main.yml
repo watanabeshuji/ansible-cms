@@ -3,30 +3,30 @@
   yum:
     name: php70,php70-mysqlnd
 
-- name: "check /opt/wordpress' if exist"
+- name: "check {{ wp_path }}' if exist"
   stat:
-    path: "/opt/wordpress"
+    path: "{{ wp_path }}"
   register: stat_wp_home
 - name: download wordpress
   unarchive:
     src: "{{ wp_download_url }}"
     dest: /opt
-    remote_src: True
+    remote_src: yes
     owner: apache
     group: apache
   when: stat_wp_home.stat.exists == false
 
-- name: "check /opt/wordpress/wp-config.php' if exist"
+- name: "check {{ wp_path }}/wp-config.php' if exist"
   stat:
-    path: "/opt/wordpress/wp-config.php"
+    path: "{{ wp_path }}/wp-config.php"
   register: stat_wp_config
-- name: "rename /opt/wordpress/wp-config-sample.php to /opt/wordpress/wp-config.php"
-  shell: mv /opt/wordpress/wp-config-sample.php /opt/wordpress/wp-config.php
+- name: "rename {{ wp_path }}/wp-config-sample.php to {{ wp_path }}/wp-config.php"
+  shell: "mv {{ wp_path }}/wp-config-sample.php {{ wp_path }}/wp-config.php"
   when: stat_wp_config.stat.exists == false
 
-- name: "DB_NAME: /opt/wordpress/wp-config.php"
+- name: "DB_NAME: {{ wp_path }}/wp-config.php"
   replace:
-    path: /opt/wordpress/wp-config.php
+    path: "{{ wp_path }}/wp-config.php"
     regexp: "{{ item.regexp }}"
     replace: "{{ item.replace }}"
     backup: yes
