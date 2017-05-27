@@ -1,8 +1,18 @@
-#
+---
 - group_by:
     key: "{{ cms_type }}"
+
 - name: set timezone to Asia/Tokyo
   timezone:
     name: Asia/Tokyo
-- locale_gen:
-    name: ja_JP.UTF-8
+
+- name: set LANG=ja_JP.UTF-8 in /etc/sysconfig/i18n
+  lineinfile:
+    dest: /etc/sysconfig/i18n
+    regexp: '^LANG='
+    line: 'LANG={{ system_lang }}'
+- name: set locale in /etc/cloud/cloud.cfg
+  lineinfile:
+    dest: /etc/cloud/cloud.cfg
+    regexp: '^locale'
+    line: 'locale: ja_JP.UTF-8'
