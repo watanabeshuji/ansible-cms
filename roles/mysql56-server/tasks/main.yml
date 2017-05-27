@@ -1,0 +1,5 @@
+---
+- name: mysql56-server installed
+  yum:
+    name: mysql56-server
+

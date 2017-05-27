@@ -1,0 +1,16 @@
+#
+# wordpress_with_db.yml
+#
+# ansible-playbook \
+#  --extra-vars "db_user=master db_password=ChangeIt db_name=wordpress db_endpoint=localhost" \
+#  wordpress_with_db.yml
+#
+- hosts: localhost
+  connection: local
+  vars:
+    cms_type: wordpress
+  roles:
+   - common
+   - mysql56-server
+   - apache24
+   - wordpress
