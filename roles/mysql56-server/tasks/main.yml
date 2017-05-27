@@ -2,11 +2,6 @@
 - name: mysql56-server installed
   yum:
     name: mysql56-server
-- name: mysqld service started
-  service:
-    name: mysqld
-    state: started
-    enabled: yes
 - name: "/etc/my.cnf"
   template:
     src: my.cnf
@@ -17,6 +12,11 @@
     mode: "0644"
   notify:
     - restart mysqld service
+- name: mysqld service started
+  service:
+    name: mysqld
+    state: started
+    enabled: yes
 
 - name: "DB master user"
   mysql_user:
