@@ -7,4 +7,14 @@
     name: mysqld
     state: started
     enabled: yes
+- name: "/etc/my.cnf"
+  template:
+    src: my.cnf
+    dest: /etc/my.cnf
+    backup: yes
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - restart mysqld service
 
