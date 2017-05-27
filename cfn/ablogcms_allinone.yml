@@ -1,0 +1,200 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "a-blog cms Testing Environment (All-in-One)"
+Parameters:
+  EnvName:
+    Type: String
+    Default: "AblogTest"
+  KeyName:
+    Type: String
+    Default: "aws-cms"
+  DbUser:
+    Type: String
+    Default: "master"
+  DbPassword:
+    Type: String
+    Default: "ChangeIt"
+    MinLength: "8"
+  DbName:
+    Type: String
+    Default: "ablogcms"
+Resources:
+  # IAM Role
+  Ec2IamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Join [ "_", [ "EC2", !Ref EnvName ] ]
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: "CloudWatchLogs"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "logs:DescribeLogStreams"
+                Resource:
+                  - "arn:aws:logs:*:*:*"
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref Ec2IamRole
+  # VPC
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - { Key: "Name", Value: !Ref EnvName }
+  IGW:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+        - { Key: "Name", Value: !Join [ " ", [ !Ref EnvName, "IGW" ] ] }
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref IGW
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - { Key: Name, Value: "PublicRouteTable" }
+  PublicRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref IGW
+  SubnetA:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.10.0/24"
+      AvailabilityZone: "ap-northeast-1a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Join [ " ", [ !Ref EnvName, "SubnetA" ] ] }
+  SubnetRouteTableAssociationFrontA:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref PublicRouteTable
+  SubnetC:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.20.0/24"
+      AvailabilityZone: "ap-northeast-1c"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Join [ " ", [ !Ref EnvName, "SubnetC" ] ] }
+  SubnetRouteTableAssociationFrontC:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref SubnetC
+      RouteTableId: !Ref PublicRouteTable
+  # Security Group
+  InternalSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Allow all access in VPC"
+      SecurityGroupIngress:
+      - IpProtocol: "-1"
+        CidrIp: "10.0.0.0/16"
+      Tags:
+       - {Key: "Name", Value: "Internal" }
+  PublicWebSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Allow web access from internet"
+      SecurityGroupIngress:
+      - IpProtocol: "tcp"
+        FromPort: "80"
+        ToPort: "80"
+        CidrIp: "0.0.0.0/0"
+      - IpProtocol: "tcp"
+        FromPort: "443"
+        ToPort: "443"
+        CidrIp: "0.0.0.0/0"
+      Tags:
+       - {Key: "Name", Value: "PublicWeb" }
+  MainteSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Allow ssh access"
+      SecurityGroupIngress:
+      - IpProtocol: "tcp"
+        FromPort: "22"
+        ToPort: "22"
+        CidrIp: "0.0.0.0/0"
+      Tags:
+       - {Key: "Name", Value: "Mainte" }
+  # EC2
+  Ec2Instance:
+    Type: "AWS::EC2::Instance"
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+    Properties:
+      InstanceType: "t2.small"
+      ImageId: "ami-923d12f5"
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs: { VolumeSize: "20" }
+      SubnetId: !Ref SubnetA
+      SecurityGroupIds:
+        - !Ref InternalSecurityGroup
+        - !Ref PublicWebSecurityGroup
+        - !Ref MainteSecurityGroup
+      Tags:
+        - {Key: "Name", Value: !Ref EnvName }
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum -y update
+          yum -y install git MySQL-python27
+          pip install ansible==2.3.0
+
+          git clone https://github.com/watanabeshuji/ansible-cms.git /opt/ansible-cms
+          /usr/local/bin/ansible-playbook \
+           --extra-vars "db_user=${DbUser} db_password=${DbPassword} db_name=${DbName}" \
+           /opt/ansible-cms/ablogcms_with_db.yml
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Ec2Instance --region ${AWS::Region}
+  EIP:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: "vpc"
+  AttachEIP:
+    Type: "AWS::EC2::EIPAssociation"
+    Properties:
+      EIP: !Ref EIP
+      InstanceId: !Ref Ec2Instance
+Outputs:
+  EIP: { Value: !Ref EIP }
+  SSHCOMMAND: { Value: !Join [ "", [ "ssh -i ~/.ssh/", !Ref KeyName, ".pem ec2-user@", !Ref EIP ] ] }
+  URL: { Value: !Join [ "", [ "http://", !Ref EIP] ] }
+
+
