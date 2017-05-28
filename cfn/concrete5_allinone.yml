@@ -112,16 +112,6 @@ Resources:
       SubnetId: !Ref SubnetC
       RouteTableId: !Ref PublicRouteTable
   # Security Group
-  InternalSecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
-    Properties:
-      VpcId: !Ref VPC
-      GroupDescription: "Allow all access in VPC"
-      SecurityGroupIngress:
-      - IpProtocol: "-1"
-        CidrIp: "10.0.0.0/16"
-      Tags:
-       - {Key: "Name", Value: "Internal" }
   PublicWebSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -132,10 +122,6 @@ Resources:
         FromPort: "80"
         ToPort: "80"
         CidrIp: "0.0.0.0/0"
-      - IpProtocol: "tcp"
-        FromPort: "443"
-        ToPort: "443"
-        CidrIp: "0.0.0.0/0"
       Tags:
        - {Key: "Name", Value: "PublicWeb" }
   MainteSecurityGroup:
@@ -143,11 +129,6 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       GroupDescription: "Allow ssh access"
-      SecurityGroupIngress:
-      - IpProtocol: "tcp"
-        FromPort: "22"
-        ToPort: "22"
-        CidrIp: "0.0.0.0/0"
       Tags:
        - {Key: "Name", Value: "Mainte" }
   # EC2
@@ -166,7 +147,6 @@ Resources:
           Ebs: { VolumeSize: "20" }
       SubnetId: !Ref SubnetA
       SecurityGroupIds:
-        - !Ref InternalSecurityGroup
         - !Ref PublicWebSecurityGroup
         - !Ref MainteSecurityGroup
       Tags:
