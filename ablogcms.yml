@@ -1,0 +1,13 @@
+#
+# ablogcms.yml
+#
+# ansible-playbook --extra-vars "db_user=master db_password=ChangeIt db_name=ablogcms db_endpoint=testwordpress.xxx.ap-northeast-1.rds.amazonaws.com" ablogcms.yml
+#
+- hosts: localhost
+  connection: local
+  vars:
+    cms_type: ablogcms
+  roles:
+   - common
+   - apache24
+   - ablogcms
