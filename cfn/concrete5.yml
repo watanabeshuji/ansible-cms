@@ -1,9 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "a-blog cms Testing Environment (All-in-One)"
+Description: "Concrete5 Production Environment"
 Parameters:
   EnvName:
     Type: String
-    Default: "TestAblog"
+    Default: "PrdConcrete5"
   KeyName:
     Type: String
     Default: "aws-cms"
@@ -16,7 +16,7 @@ Parameters:
     MinLength: "8"
   DbName:
     Type: String
-    Default: "ablogcms"
+    Default: "concrete5"
 Resources:
   # IAM Role
   Ec2IamRole:
@@ -112,6 +112,16 @@ Resources:
       SubnetId: !Ref SubnetC
       RouteTableId: !Ref PublicRouteTable
   # Security Group
+  InternalSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Allow all access in VPC"
+      SecurityGroupIngress:
+      - IpProtocol: "-1"
+        CidrIp: "10.0.0.0/16"
+      Tags:
+       - {Key: "Name", Value: "Internal" }
   PublicWebSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
     Properties:
@@ -131,6 +141,44 @@ Resources:
       GroupDescription: "Allow ssh access"
       Tags:
        - {Key: "Name", Value: "Mainte" }
+  # RDS
+  DBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for database"
+      SubnetIds:
+        - !Ref SubnetA
+        - !Ref SubnetC
+  DBParameterGroup:
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties:
+      Description: "Parameter group for mysql5.6"
+      Family: "mysql5.6"
+      Parameters:
+        character_set_client: "utf8"
+        character_set_connection: "utf8"
+        character_set_database: "utf8"
+        character_set_results: "utf8"
+        character_set_server: "utf8"
+        skip-character-set-client-handshake: "1"
+  DbInstance:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      DBInstanceIdentifier: !Ref EnvName
+      DBInstanceClass: "db.t2.small"
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref DBParameterGroup
+      MultiAZ: false
+      Engine: "mysql"
+      EngineVersion: "5.6.29"
+      MasterUsername: !Ref DbUser
+      MasterUserPassword: !Ref DbPassword
+      DBName: !Ref DbName
+      StorageType: "gp2"
+      AllocatedStorage: '10'
+      VPCSecurityGroups:
+        - !Ref InternalSecurityGroup
+    DeletionPolicy: Delete
   # EC2
   Ec2Instance:
     Type: "AWS::EC2::Instance"
@@ -147,22 +195,26 @@ Resources:
           Ebs: { VolumeSize: "20" }
       SubnetId: !Ref SubnetA
       SecurityGroupIds:
-        - !Ref PublicWebSecurityGroup
+        - !Ref InternalSecurityGroup
         - !Ref MainteSecurityGroup
       Tags:
-        - {Key: "Name", Value: !Ref EnvName }
+       - {Key: "Name", Value: !Ref EnvName }
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          yum -y update
-          yum -y install git MySQL-python27
-          pip install ansible==2.3.0
+        Fn::Base64:
+          Fn::Sub:
+            - |+
+              #!/bin/bash -xe
+              yum -y update
+              yum -y install git
+              pip install ansible==2.3.0
 
-          git clone https://github.com/watanabeshuji/ansible-cms.git /opt/ansible-cms
-          /usr/local/bin/ansible-playbook \
-           --extra-vars "db_user=${DbUser} db_password=${DbPassword} db_name=${DbName}" \
-           /opt/ansible-cms/ablogcms_with_db.yml
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Ec2Instance --region ${AWS::Region}
+              git clone https://github.com/watanabeshuji/ansible-cms.git /opt/ansible-cms
+              /usr/local/bin/ansible-playbook \
+                --extra-vars "db_user=${DbUser} db_password=${DbPassword} db_name=${DbName} db_endpoint=${DbEndPoint}" \
+                /opt/ansible-cms/concrete5.yml
+              /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Ec2Instance --region ${AWS::Region}
+            - { DbEndPoint: !GetAtt DbInstance.Endpoint.Address }
+    DependsOn: DbInstance
   EIP:
     Type: "AWS::EC2::EIP"
     Properties:
@@ -172,9 +224,42 @@ Resources:
     Properties:
       EIP: !Ref EIP
       InstanceId: !Ref Ec2Instance
+  # ELB
+  ALB:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Name: !Ref EnvName
+      Subnets:
+        - !Ref SubnetA
+        - !Ref SubnetC
+      SecurityGroups:
+        - !Ref InternalSecurityGroup
+        - !Ref PublicWebSecurityGroup
+  TargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name: !Join [ "", [ !Ref EnvName, "Group" ] ]
+      VpcId: !Ref VPC
+      Protocol: "HTTP"
+      Port: 80
+      Targets:
+        - Id: !Ref Ec2Instance
+          Port: 80
+      HealthCheckIntervalSeconds: 60
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckPath: /
+    DependsOn: DbInstance
+  ALBListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: "forward"
+          TargetGroupArn: !Ref TargetGroup
 Outputs:
   EIP: { Value: !Ref EIP }
   SSHCOMMAND: { Value: !Join [ "", [ "ssh -i ~/.ssh/", !Ref KeyName, ".pem ec2-user@", !Ref EIP ] ] }
-  URL: { Value: !Join [ "", [ "http://", !Ref EIP] ] }
-
-
+  URL: { Value: !Join [ "", [ "http://", !GetAtt ALB.DNSName ] ] }
