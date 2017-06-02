@@ -1,0 +1,265 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "WordPress Production Environment"
+Parameters:
+  EnvName:
+    Type: String
+    Default: "PrdWordPress"
+  KeyName:
+    Type: String
+    Default: "aws-cms"
+  DbUser:
+    Type: String
+    Default: "master"
+  DbPassword:
+    Type: String
+    Default: "ChangeIt"
+    MinLength: "8"
+  DbName:
+    Type: String
+    Default: "wordpress"
+Resources:
+  # IAM Role
+  Ec2IamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Join [ "_", [ "EC2", !Ref EnvName ] ]
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Policies:
+        - PolicyName: "CloudWatchLogs"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "logs:DescribeLogStreams"
+                Resource:
+                  - "arn:aws:logs:*:*:*"
+  InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      Path: "/"
+      Roles:
+        - !Ref Ec2IamRole
+  # VPC
+  VPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: "10.0.0.0/16"
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - { Key: "Name", Value: !Ref EnvName }
+  IGW:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+        - { Key: "Name", Value: !Join [ " ", [ !Ref EnvName, "IGW" ] ] }
+  AttachGateway:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref IGW
+  PublicRouteTable:
+    Type: "AWS::EC2::RouteTable"
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - { Key: Name, Value: "PublicRouteTable" }
+  PublicRoute:
+    Type: "AWS::EC2::Route"
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: "0.0.0.0/0"
+      GatewayId: !Ref IGW
+  SubnetA:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.10.0/24"
+      AvailabilityZone: "ap-northeast-1a"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Join [ " ", [ !Ref EnvName, "SubnetA" ] ] }
+  SubnetRouteTableAssociationFrontA:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref PublicRouteTable
+  SubnetC:
+    Type: "AWS::EC2::Subnet"
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: "10.0.20.0/24"
+      AvailabilityZone: "ap-northeast-1c"
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Join [ " ", [ !Ref EnvName, "SubnetC" ] ] }
+  SubnetRouteTableAssociationFrontC:
+    Type: "AWS::EC2::SubnetRouteTableAssociation"
+    Properties:
+      SubnetId: !Ref SubnetC
+      RouteTableId: !Ref PublicRouteTable
+  # Security Group
+  InternalSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Allow all access in VPC"
+      SecurityGroupIngress:
+      - IpProtocol: "-1"
+        CidrIp: "10.0.0.0/16"
+      Tags:
+       - {Key: "Name", Value: "Internal" }
+  PublicWebSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Allow web access from internet"
+      SecurityGroupIngress:
+      - IpProtocol: "tcp"
+        FromPort: "80"
+        ToPort: "80"
+        CidrIp: "0.0.0.0/0"
+      Tags:
+       - {Key: "Name", Value: "PublicWeb" }
+  MainteSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: "Allow ssh access"
+      Tags:
+       - {Key: "Name", Value: "Mainte" }
+  # RDS
+  DBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for database"
+      SubnetIds:
+        - !Ref SubnetA
+        - !Ref SubnetC
+  DBParameterGroup:
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties:
+      Description: "Parameter group for mysql5.6"
+      Family: "mysql5.6"
+      Parameters:
+        character_set_client: "utf8"
+        character_set_connection: "utf8"
+        character_set_database: "utf8"
+        character_set_results: "utf8"
+        character_set_server: "utf8"
+        skip-character-set-client-handshake: "1"
+  DbInstance:
+    Type: "AWS::RDS::DBInstance"
+    Properties:
+      DBInstanceIdentifier: !Ref EnvName
+      DBInstanceClass: "db.t2.small"
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DBParameterGroupName: !Ref DBParameterGroup
+      MultiAZ: false
+      Engine: "mysql"
+      EngineVersion: "5.6.29"
+      MasterUsername: !Ref DbUser
+      MasterUserPassword: !Ref DbPassword
+      DBName: !Ref DbName
+      StorageType: "gp2"
+      AllocatedStorage: '10'
+      VPCSecurityGroups:
+        - !Ref InternalSecurityGroup
+    DeletionPolicy: Delete
+  # EC2
+  Ec2Instance:
+    Type: "AWS::EC2::Instance"
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT5M
+    Properties:
+      InstanceType: "t2.small"
+      ImageId: "ami-923d12f5"
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs: { VolumeSize: "20" }
+      SubnetId: !Ref SubnetA
+      SecurityGroupIds:
+        - !Ref InternalSecurityGroup
+        - !Ref MainteSecurityGroup
+      Tags:
+       - {Key: "Name", Value: !Ref EnvName }
+      UserData:
+        Fn::Base64:
+          Fn::Sub:
+            - |+
+              #!/bin/bash -xe
+              yum -y update
+              yum -y install git
+              pip install ansible==2.3.0
+
+              git clone https://github.com/watanabeshuji/ansible-cms.git /opt/ansible-cms
+              /usr/local/bin/ansible-playbook \
+                --extra-vars "db_user=${DbUser} db_password=${DbPassword} db_name=${DbName} db_endpoint=${DbEndPoint}" \
+                /opt/ansible-cms/wordpress.yml
+              /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource Ec2Instance --region ${AWS::Region}
+            - { DbEndPoint: !GetAtt DbInstance.Endpoint.Address }
+    DependsOn: DbInstance
+  EIP:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: "vpc"
+  AttachEIP:
+    Type: "AWS::EC2::EIPAssociation"
+    Properties:
+      EIP: !Ref EIP
+      InstanceId: !Ref Ec2Instance
+  # ELB
+  ALB:
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties:
+      Name: !Ref EnvName
+      Subnets:
+        - !Ref SubnetA
+        - !Ref SubnetC
+      SecurityGroups:
+        - !Ref InternalSecurityGroup
+        - !Ref PublicWebSecurityGroup
+  TargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties:
+      Name: !Join [ "", [ !Ref EnvName, "Group" ] ]
+      VpcId: !Ref VPC
+      Protocol: "HTTP"
+      Port: 80
+      Targets:
+        - Id: !Ref Ec2Instance
+          Port: 80
+      HealthCheckIntervalSeconds: 60
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      HealthCheckPath: /
+    DependsOn: DbInstance
+  ALBListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: "HTTP"
+      DefaultActions:
+        - Type: "forward"
+          TargetGroupArn: !Ref TargetGroup
+Outputs:
+  EIP: { Value: !Ref EIP }
+  SSHCOMMAND: { Value: !Join [ "", [ "ssh -i ~/.ssh/", !Ref KeyName, ".pem ec2-user@", !Ref EIP ] ] }
+  URL: { Value: !Join [ "", [ "http://", !GetAtt ALB.DNSName ] ] }
