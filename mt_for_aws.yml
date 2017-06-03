@@ -1,0 +1,11 @@
+#
+# mt_for_aws.yml
+#
+# ansible-playbook mt_for_aws.yml
+#
+- hosts: localhost
+  connection: local
+  vars:
+    cms_type: ablogcms
+  roles:
+   - common
