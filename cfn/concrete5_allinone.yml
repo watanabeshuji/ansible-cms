@@ -97,20 +97,6 @@ Resources:
     Properties:
       SubnetId: !Ref SubnetA
       RouteTableId: !Ref PublicRouteTable
-  SubnetC:
-    Type: "AWS::EC2::Subnet"
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: "10.0.20.0/24"
-      AvailabilityZone: "ap-northeast-1c"
-      MapPublicIpOnLaunch: true
-      Tags:
-        - { Key: Name, Value: !Join [ " ", [ !Ref EnvName, "SubnetC" ] ] }
-  SubnetRouteTableAssociationFrontC:
-    Type: "AWS::EC2::SubnetRouteTableAssociation"
-    Properties:
-      SubnetId: !Ref SubnetC
-      RouteTableId: !Ref PublicRouteTable
   # Security Group
   PublicWebSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
